@@ -1,0 +1,11 @@
+sso.neeranuch.org {
+	encode zstd gzip
+	# Optional: harden headers
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+	}
+	# Reverse proxy to Keycloak container
+	reverse_proxy keycloak:8080
+}
