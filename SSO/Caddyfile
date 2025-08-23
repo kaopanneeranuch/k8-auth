@@ -1,7 +1,6 @@
 sso.neeranuchj.org {
-    reverse_proxy https://keycloak:8443
-    tls /etc/ssl/certs/server.crt /etc/ssl/private/server.key
-    log {
-        output file /var/log/caddy/access.log
-    }
+  reverse_proxy keycloak:8443 {
+    header_up Host {http.request.host}
+  }
+  tls /etc/ssl/certs/server.crt /etc/ssl/private/server.key
 }
