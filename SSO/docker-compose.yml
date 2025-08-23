@@ -35,6 +35,8 @@ services:
     restart: always
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile
+      - ./server.crt:/etc/ssl/certs/server.crt
+      - ./server.key:/etc/ssl/private/server.key
     ports:
       - "80:80"
       - "443:443"
