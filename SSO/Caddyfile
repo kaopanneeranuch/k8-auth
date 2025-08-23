@@ -1,6 +1,9 @@
 sso.neeranuchj.org {
   reverse_proxy keycloak:8443 {
     header_up Host {http.request.host}
+    transport http {
+      tls_insecure_skip_verify
+    }
   }
   tls /etc/ssl/certs/server.crt /etc/ssl/private/server.key
 }
