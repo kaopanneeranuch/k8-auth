@@ -23,7 +23,7 @@ services:
       - KEYCLOAK_HOSTNAME=sso.neeranuchj.org
       - KEYCLOAK_HOSTNAME_STRICT=false
       - DB_VENDOR=postgres
-      - DB_ADDR=db:5432
+      - DB_ADDR=sso-db-1:5432
       - DB_DATABASE=${POSTGRES_DB}
       - DB_USER=${POSTGRES_USER}
       - DB_PASSWORD=${POSTGRES_PASSWORD}
