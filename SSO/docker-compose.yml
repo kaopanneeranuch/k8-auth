@@ -32,7 +32,9 @@ services:
       - ./server.key:/etc/ssl/private/server.key
     ports:
       - "8443:8443"
-    command: ["start", "--https-port", "8443", "--https-certificate-file", "/etc/ssl/certs/server.crt", "--https-certificate-key-file", "/etc/ssl/private/server.key"]
+    extra_hosts:
+      - "sso.neeranuchj.org:127.0.0.1"
+    command: ["start", "--https-port", "8443", "--https-certificate-file", "/etc/ssl/certs/server.crt", "--https-certificate-key-file", "/etc/ssl/private/server.key", "--hostname-strict=false"]
     networks:
       - kcnet
 
