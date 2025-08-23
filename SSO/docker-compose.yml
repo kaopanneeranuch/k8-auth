@@ -12,6 +12,11 @@ services:
       - dbdata:/var/lib/postgresql/data
     networks:
       - kcnet
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "${POSTGRES_USER}", "-d", "${POSTGRES_DB}"]
+      interval: 10s
+      retries: 5
+      timeout: 5s
 
   keycloak:
     image: quay.io/keycloak/keycloak:latest
@@ -23,7 +28,7 @@ services:
       - KEYCLOAK_HOSTNAME=sso.neeranuchj.org
       - KEYCLOAK_HOSTNAME_STRICT=false
       - DB_VENDOR=postgres
-      - DB_ADDR=sso-db-1:5432
+      - DB_ADDR=db:5432 
       - DB_DATABASE=${POSTGRES_DB}
       - DB_USER=${POSTGRES_USER}
       - DB_PASSWORD=${POSTGRES_PASSWORD}
@@ -37,6 +42,9 @@ services:
     command: ["start", "--https-port", "8443", "--https-certificate-file", "/etc/ssl/certs/server.crt", "--https-certificate-key-file", "/etc/ssl/private/server.key", "--hostname-strict=false"]
     networks:
       - kcnet
+    depends_on:
+      db:
+        condition: service_healthy 
 
   caddy:
     image: caddy:2
