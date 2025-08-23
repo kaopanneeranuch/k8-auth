@@ -1,3 +1,9 @@
-ec2-13-222-246-95.compute-1.amazonaws.com {
-  reverse_proxy keycloak:8080
+sso.neeranuchj.org {
+  reverse_proxy keycloak:8443 {
+    header_up Host {http.request.host}
+    transport http {
+      tls_insecure_skip_verify
+    }
+  }
+  tls /etc/ssl/certs/server.crt /etc/ssl/private/server.key
 }

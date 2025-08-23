@@ -1,3 +1,5 @@
+version: '3.7'
+
 services:
   db:
     image: postgres:16
@@ -8,41 +10,66 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
       - dbdata:/var/lib/postgresql/data
-    networks: [kcnet]
+    networks:
+      - kcnet
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "${POSTGRES_USER}", "-d", "${POSTGRES_DB}"]
+      interval: 10s
+      retries: 5
+      timeout: 5s
 
   keycloak:
     image: quay.io/keycloak/keycloak:latest
-    restart: unless-stopped
-    depends_on: [db]
+    container_name: keycloak
+    restart: always
     environment:
-      KEYCLOAK_ADMIN: ${KC_ADMIN}
-      KEYCLOAK_ADMIN_PASSWORD: ${KC_ADMIN_PASSWORD}
-      KC_DB: postgres
-      KC_DB_USERNAME: ${POSTGRES_USER}
-      KC_DB_PASSWORD: ${POSTGRES_PASSWORD}
-      KC_DB_URL: jdbc:postgresql://db:5432/${POSTGRES_DB}
-      KC_HOSTNAME: ${KC_HOSTNAME}
-      KC_PROXY: edge
-    command: ["start"]
-    expose:
-      - "8080"
-    networks: [kcnet]
+      - KEYCLOAK_HTTPS_CERT_FILE=/etc/ssl/certs/server.crt
+      - KEYCLOAK_HTTPS_KEY_FILE=/etc/ssl/private/server.key
+      - KEYCLOAK_HOSTNAME=sso.neeranuchj.org
+      - KEYCLOAK_HOSTNAME_STRICT=false
+      - KEYCLOAK_ADMIN=${KC_ADMIN}
+      - KEYCLOAK_ADMIN_PASSWORD=${KC_ADMIN_PASSWORD}
+      - KEYCLOAK_IMPORT=/opt/keycloak/realm.json
+      - KEYCLOAK_IMPORT_POLICIES_ENABLED=true
+      - DB_VENDOR=postgres
+      - DB_ADDR=db:5432 
+      - DB_DATABASE=${POSTGRES_DB}
+      - DB_USER=${POSTGRES_USER}
+      - DB_PASSWORD=${POSTGRES_PASSWORD}
+    volumes:
+      - ./server.crt:/etc/ssl/certs/server.crt
+      - ./server.key:/etc/ssl/private/server.key
+      - ./realm.json:/opt/keycloak/realm.json
+    ports:
+      - "8443:8443"
+    extra_hosts:
+      - "sso.neeranuchj.org:127.0.0.1"
+    command: ["start", "--https-port", "8443", "--https-certificate-file", "/etc/ssl/certs/server.crt", "--https-certificate-key-file", "/etc/ssl/private/server.key", "--hostname-strict=false"]
+    networks:
+      - kcnet
+    depends_on:
+      db:
+        condition: service_healthy 
 
   caddy:
     image: caddy:2
-    restart: unless-stopped
-    depends_on: [keycloak]
+    container_name: caddy
+    restart: always
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - ./server.crt:/etc/ssl/certs/server.crt
+      - ./server.key:/etc/ssl/private/server.key
     ports:
       - "80:80"
       - "443:443"
-    volumes:
-      - caddydata:/data
-      - caddyconfig:/config
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-    networks: [kcnet]
+    depends_on:
+      - keycloak
+    networks:
+      - kcnet
 
 networks:
   kcnet:
+    driver: bridge
 
 volumes:
   dbdata:
