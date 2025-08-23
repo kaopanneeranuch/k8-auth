@@ -1,21 +1,21 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: external-cloud-service-2
+  name: app2
   labels:
-    app: external-cloud-service-2
+    app: app2
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: external-cloud-service-2
+      app: app2
   template:
     metadata:
       labels:
-        app: external-cloud-service-2
+        app: app2
     spec:
       containers:
-      - name: external-cloud-service-2
+      - name: app2
         image: neeranuchj/kubernetes-zerotrust:external-cloud-service-2
         ports:
         - containerPort: 3001
@@ -30,10 +30,10 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: external-cloud-service-2
+  name: app2
 spec:
   selector:
-    app: external-cloud-service-2
+    app: app2
   ports:
     - protocol: TCP
       port: 80

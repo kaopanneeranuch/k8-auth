@@ -1,24 +1,24 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: internal-api-service-1
+  name: app4
   labels:
-    app: internal-api-service-1
+    app: app4
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: internal-api-service-1
+      app: app4
   template:
     metadata:
       labels:
-        app: internal-api-service-1
+        app: app4
     spec:
       containers:
-      - name: internal-api-service-1
-        image: neeranuchj/kubernetes-zerotrust:internal-api-service-1
+      - name: app4
+        image: neeranuchj/kubernetes-zerotrust:internal-api-service-2
         ports:
-        - containerPort: 5001
+        - containerPort: 5002
         resources:
           requests:
             memory: "100Mi"
@@ -30,12 +30,12 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: internal-api-service-1
+  name: app4
 spec:
   selector:
-    app: internal-api-service-1
+    app: app4
   ports:
     - protocol: TCP
       port: 80
-      targetPort: 5001
+      targetPort: 5002
   type: ClusterIP
