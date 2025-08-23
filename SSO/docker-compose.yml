@@ -20,6 +20,7 @@ services:
     environment:
       - KEYCLOAK_HTTPS_CERT_FILE=/etc/ssl/certs/server.crt
       - KEYCLOAK_HTTPS_KEY_FILE=/etc/ssl/private/server.key
+      - KEYCLOAK_HOSTNAME=sso.neeranuchj.org
     volumes:
       - ./server.crt:/etc/ssl/certs/server.crt
       - ./server.key:/etc/ssl/private/server.key
