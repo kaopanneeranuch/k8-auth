@@ -25,7 +25,7 @@ services:
       - ./server.key:/etc/ssl/private/server.key
     ports:
       - "8443:8443"
-    command: ["start", "--http-enabled", "--https-port", "8443", "--https-certificate-file", "/etc/ssl/certs/server.crt", "--https-certificate-key-file", "/etc/ssl/private/server.key"]
+    command: ["start", "--https-port", "8443", "--https-certificate-file", "/etc/ssl/certs/server.crt", "--https-certificate-key-file", "/etc/ssl/private/server.key"]
     networks:
       - kcnet
 
