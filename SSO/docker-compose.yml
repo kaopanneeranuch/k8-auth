@@ -1,3 +1,5 @@
+version: '3.7'
+
 services:
   db:
     image: postgres:16
@@ -8,45 +10,42 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
       - dbdata:/var/lib/postgresql/data
-    networks: [kcnet]
+    networks:
+      - kcnet
 
   keycloak:
     image: quay.io/keycloak/keycloak:latest
-    restart: unless-stopped
-    depends_on: [db]
+    container_name: sso-keycloak
+    restart: always
     environment:
-      KEYCLOAK_ADMIN: ${KC_ADMIN}
-      KEYCLOAK_ADMIN_PASSWORD: ${KC_ADMIN_PASSWORD}
-      KC_DB: postgres
-      KC_DB_USERNAME: ${POSTGRES_USER}
-      KC_DB_PASSWORD: ${POSTGRES_PASSWORD}
-      KC_DB_URL: jdbc:postgresql://db:5432/${POSTGRES_DB}
-      KC_HOSTNAME: ${KC_HOSTNAME}
-      KC_PROXY: edge
-      KEYCLOAK_HTTP_ENABLED: "true"     
-      KEYCLOAK_HTTPS_ENABLED: "false"     
-      KEYCLOAK_HTTP_PORT: "8080"        
-      KEYCLOAK_SSL_REQUIRED: "NONE"     
-    command: ["start"]
-    expose:
-      - "8080"  # Exposing HTTP (not HTTPS)
-    networks: [kcnet]
+      - KEYCLOAK_HTTPS_CERT_FILE=/etc/ssl/certs/server.crt
+      - KEYCLOAK_HTTPS_KEY_FILE=/etc/ssl/private/server.key
+    volumes:
+      - ./server.crt:/etc/ssl/certs/server.crt
+      - ./server.key:/etc/ssl/private/server.key
+    ports:
+      - "8443:8443"
+    command: ["start", "--https"]
+    networks:
+      - kcnet
 
   caddy:
     image: caddy:2
-    restart: unless-stopped
-    depends_on: [keycloak]
+    container_name: sso-caddy-1
+    restart: always
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
     ports:
       - "80:80"
       - "443:443"
-    volumes:
-      - caddydata:/data
-      - caddyconfig:/config
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-    networks: [kcnet]
+    depends_on:
+      - keycloak
+    networks:
+      - kcnet
 
 networks:
   kcnet:
+    driver: bridge
 
 volumes:
   dbdata:
