@@ -4,7 +4,7 @@ kind: ClusterRoleBinding
 metadata:
   name: admin-role-binding
 subjects:
-- kind: User
+- kind: Group
   name: "admin"
   apiGroup: rbac.authorization.k8s.io
 roleRef:
@@ -18,7 +18,7 @@ kind: ClusterRoleBinding
 metadata:
   name: user-role-binding
 subjects:
-- kind: User
+- kind: Group
   name: "user"
   apiGroup: rbac.authorization.k8s.io
 roleRef:
