@@ -1,0 +1,97 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kube-oidc-proxy
+  namespace: auth-proxy
+labels:
+  app: kube-oidc-proxy
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kube-oidc-proxy
+  template:
+    metadata:
+      labels:
+        app: kube-oidc-proxy
+    spec:
+      serviceAccountName: kube-oidc-proxy
+      containers:
+      - name: proxy
+        image: ghcr.io/tremolosecurity/kube-oidc-proxy:latest
+        imagePullPolicy: IfNotPresent
+        args:
+          # listen for client (kubectl/load) requests
+          - --listen-address=0.0.0.0:443
+
+          # OIDC settings (validated by the proxy)
+          - --oidc-issuer-url=$(OIDC_ISSUER)
+          - --oidc-client-id=$(OIDC_CLIENT_ID)
+          - --oidc-username-claim=preferred_username
+          - --oidc-groups-claim=groups
+          - --oidc-ca-file=/etc/oidc/ca.crt
+
+          # upstream = kube-apiserver Service
+          - --upstream-url=https://kubernetes.default.svc
+          - --upstream-ca-file=/var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+
+          # present a client cert that the apiserver trusts for RequestHeader auth
+          - --proxy-client-cert-file=/etc/front-proxy/tls.crt
+          - --proxy-client-key-file=/etc/front-proxy/tls.key
+
+          # (optional) skip auth on health endpoint
+          - --skip-auth-regex=/healthz
+
+          # verbosity
+          - --v=2
+        ports:
+        - name: https
+          containerPort: 443
+        volumeMounts:
+        - name: oidc-ca
+          mountPath: /etc/oidc
+          readOnly: true
+        - name: front-proxy-client
+          mountPath: /etc/front-proxy
+          readOnly: true
+        env:
+        - name: OIDC_ISSUER
+          valueFrom:
+            secretKeyRef:
+              name: oidc-config
+              key: issuer
+        - name: OIDC_CLIENT_ID
+          valueFrom:
+            secretKeyRef:
+              name: oidc-config
+              key: clientID
+      volumes:
+      - name: oidc-ca
+        secret:
+          secretName: oidc-config
+          items:
+          - key: ca.crt
+            path: ca.crt
+      - name: front-proxy-client
+        secret:
+          secretName: front-proxy-client
+          items:
+          - key: tls.crt
+            path: tls.crt
+          - key: tls.key
+            path: tls.key
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kube-oidc-proxy
+  namespace: auth-proxy
+spec:
+  type: NodePort
+  selector:
+    app: kube-oidc-proxy
+  ports:
+  - name: https
+    port: 443
+    targetPort: https
+    nodePort: 30044
