@@ -3,8 +3,8 @@ kind: Deployment
 metadata:
   name: kube-oidc-proxy
   namespace: auth-proxy
-labels:
-  app: kube-oidc-proxy
+  labels:
+    app: kube-oidc-proxy
 spec:
   replicas: 1
   selector:
@@ -21,28 +21,17 @@ spec:
         image: ghcr.io/tremolosecurity/kube-oidc-proxy:latest
         imagePullPolicy: IfNotPresent
         args:
-          # listen for client (kubectl/load) requests
           - --listen-address=0.0.0.0:443
-
-          # OIDC settings (validated by the proxy)
           - --oidc-issuer-url=$(OIDC_ISSUER)
           - --oidc-client-id=$(OIDC_CLIENT_ID)
           - --oidc-username-claim=preferred_username
           - --oidc-groups-claim=groups
           - --oidc-ca-file=/etc/oidc/ca.crt
-
-          # upstream = kube-apiserver Service
           - --upstream-url=https://kubernetes.default.svc
           - --upstream-ca-file=/var/run/secrets/kubernetes.io/serviceaccount/ca.crt
-
-          # present a client cert that the apiserver trusts for RequestHeader auth
           - --proxy-client-cert-file=/etc/front-proxy/tls.crt
           - --proxy-client-key-file=/etc/front-proxy/tls.key
-
-          # (optional) skip auth on health endpoint
           - --skip-auth-regex=/healthz
-
-          # verbosity
           - --v=2
         ports:
         - name: https
@@ -86,6 +75,8 @@ kind: Service
 metadata:
   name: kube-oidc-proxy
   namespace: auth-proxy
+  labels:
+    app: kube-oidc-proxy
 spec:
   type: NodePort
   selector:
