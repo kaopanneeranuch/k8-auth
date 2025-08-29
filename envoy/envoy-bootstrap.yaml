@@ -1,0 +1,140 @@
+static_resources:
+  listeners:
+  - name: listener_https
+    address:
+      socket_address: { address: 0.0.0.0, port_value: 8443 }
+    filter_chains:
+    - transport_socket:
+        name: envoy.transport_sockets.tls
+        typed_config:
+          "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.DownstreamTlsContext
+          common_tls_context:
+            tls_certificates:
+            - certificate_chain: { filename: /etc/envoy/tls/tls.crt }
+              private_key:       { filename: /etc/envoy/tls/tls.key }
+      filters:
+      - name: envoy.filters.network.http_connection_manager
+        typed_config:
+          "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
+          stat_prefix: ingress_http
+          codec_type: AUTO
+          common_http_protocol_options: { idle_timeout: 3600s }
+          upgrade_configs: [{ upgrade_type: websocket }]
+          route_config:
+            name: local_route
+            virtual_hosts:
+            - name: kube
+              domains: ["*"]
+              routes:
+              - match: { prefix: "/" }
+                route: { cluster: kubeapi, timeout: 0s }
+          http_filters:
+          - name: envoy.filters.http.oauth2
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.filters.http.oauth2.v3.OAuth2
+              config:
+                authorization_endpoint: "https://sso.neeranuchj.org/realms/k8s-realm/protocol/openid-connect/auth"
+                token_endpoint:
+                  uri: "https://sso.neeranuchj.org/realms/k8s-realm/protocol/openid-connect/token"
+                  cluster: oidc
+                  timeout: 5s
+                redirect_uri: "https://$REQUEST_AUTHORITY/oauth2/callback"
+                redirect_path_matcher:
+                  path:
+                    exact: "/oauth2/callback"
+                signout_path:
+                  path:
+                    exact: "/oauth2/logout"
+                use_refresh_token: true
+                forward_bearer_token: true
+                auth_scopes: ["openid","profile","groups"]
+                credentials:
+                  client_id: "k8s-client"
+                  token_secret:
+                    name: oidc-client-secret
+                  token_formation:         
+                    bearer_token:
+                      cookie: { name: "kc_access" } 
+                    refresh_token:
+                      cookie: { name: "kc_refresh" } 
+                    hmac_secret:
+                      name: "oauth-hmac" 
+          - name: envoy.filters.http.jwt_authn
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.filters.http.jwt_authn.v3.JwtAuthentication
+              providers:
+                kc:
+                  issuer: "https://sso.neeranuchj.org/realms/k8s-realm"
+                  forward: true
+                  # from_cookies: ["kc_access"]
+                  from_headers:
+                  - name: Authorization
+                    value_prefix: "Bearer "
+                  remote_jwks:
+                    http_uri:
+                      uri: "https://sso.neeranuchj.org/realms/k8s-realm/protocol/openid-connect/certs"
+                      cluster: oidc
+                      timeout: 5s
+                    cache_duration: 600s
+              rules:
+              - match: { prefix: "/" }
+                requires:
+                  provider_name: kc
+          - name: envoy.filters.http.lua
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.filters.http.lua.v3.Lua
+              inline_code: |
+                function envoy_on_response(response_handle) end
+                function envoy_on_request(request_handle)
+                  local md = request_handle:streamInfo():dynamicMetadata()
+                  local jwt = md:get("envoy.filters.http.jwt_authn")
+                  if jwt ~= nil and jwt["kc"] ~= nil then
+                    local claims = jwt["kc"]
+                    local user = claims["preferred_username"] or claims["sub"]
+                    if user ~= nil then
+                      request_handle:headers():replace("x-remote-user", user)
+                    end
+                    local groups = claims["groups"]
+                    if groups ~= nil then
+                      request_handle:headers():remove("x-remote-group")
+                      for _,g in ipairs(groups) do
+                        request_handle:headers():add("x-remote-group", g)
+                      end
+                    end
+                  end
+                end
+          - name: envoy.filters.http.router
+
+  clusters:
+  - name: kubeapi
+    type: STRICT_DNS
+    connect_timeout: 2s
+    load_assignment:
+      cluster_name: kubeapi
+      endpoints: [{ lb_endpoints: [{ endpoint: { address: { socket_address: { address: kubernetes.default.svc, port_value: 443 }}}}]}]
+    transport_socket:
+      name: envoy.transport_sockets.tls
+      typed_config:
+        "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.UpstreamTlsContext
+        sni: kubernetes.default.svc
+        common_tls_context:
+          tls_certificates:
+          - certificate_chain: { filename: /etc/front-proxy/tls.crt }
+            private_key:       { filename: /etc/front-proxy/tls.key }
+          validation_context:
+            trusted_ca: { filename: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt }
+
+  - name: oidc
+    type: STRICT_DNS
+    connect_timeout: 2s
+    load_assignment:
+      cluster_name: oidc
+      endpoints: [{ lb_endpoints: [{ endpoint: { address: { socket_address: { address: sso.neeranuchj.org, port_value: 443 }}}}]}]
+    transport_socket:
+      name: envoy.transport_sockets.tls
+      typed_config:
+        "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.UpstreamTlsContext
+        sni: sso.neeranuchj.org
+        common_tls_context:
+          validation_context:
+            trusted_ca: { filename: /etc/oidc/ca.crt }
