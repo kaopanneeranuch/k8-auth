@@ -1,0 +1,159 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: envoy-config
+  namespace: envoy-gw
+data:
+  envoy.yaml: |
+    static_resources:
+      listeners:
+      - name: listener_https
+        address: { socket_address: { address: 0.0.0.0, port_value: 8443 } }
+        filter_chains:
+        - filters:
+          - name: envoy.filters.network.http_connection_manager
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
+              stat_prefix: ingress_http
+              codec_type: AUTO
+              route_config:
+                name: local_route
+                virtual_hosts:
+                - name: kube
+                  domains: ["*"]
+                  routes:
+                  - match: { prefix: "/" }
+                    route:
+                      cluster: kubeapi
+                      timeout: 0s
+              http_filters:
+              # 1) OAuth2 cookie session with Keycloak
+              - name: envoy.filters.http.oauth2
+                typed_config:
+                  "@type": type.googleapis.com/envoy.extensions.filters.http.oauth2.v3.OAuth2
+                  config:
+                    token_endpoint:
+                      uri: "${ISSUER}/protocol/openid-connect/token"
+                      cluster: oidc
+                      timeout: 5s
+                    authorization_endpoint: "${ISSUER}/protocol/openid-connect/auth"
+                    redirect_uri: "https://$REQUEST_AUTHORITY/oauth2/callback"
+                    redirect_path_matcher: { path: "/oauth2/callback" }
+                    signout_path: "/oauth2/logout"
+                    forward_bearer_token: true
+                    use_refresh_token: true
+                    credentials:
+                      client_id: "{{ oidc_client_id }}"
+                      token_secret:
+                        name: oidc-oauth
+                        key: client_secret
+                    auth_scopes: ["openid","profile","email","groups"]
+                    cookie_names:
+                      bearer_token: "kc_access"
+                      oauth_hmac: "kc_oauth_hmac"
+                      refresh_token: "kc_refresh"
+              # 2) Validate JWT locally & expose claims
+              - name: envoy.filters.http.jwt_authn
+                typed_config:
+                  "@type": type.googleapis.com/envoy.extensions.filters.http.jwt_authn.v3.JwtAuthentication
+                  providers:
+                    kc:
+                      issuer: "${ISSUER}"
+                      remote_jwks:
+                        http_uri:
+                          uri: "${ISSUER}/protocol/openid-connect/certs"
+                          cluster: oidc
+                          timeout: 5s
+                        cache_duration: 600s
+                      from_cookies: ["kc_access"]
+                      forward: true
+                  rules:
+                  - match: { prefix: "/" }
+                    requires: { provider_name: kc }
+              # 3) Map claims to RequestHeader impersonation
+              - name: envoy.filters.http.lua
+                typed_config:
+                  "@type": type.googleapis.com/envoy.extensions.filters.http.lua.v3.Lua
+                  inline_code: |
+                    function envoy_on_response(response_handle) end
+                    function envoy_on_request(request_handle)
+                      local md = request_handle:streamInfo():dynamicMetadata()
+                      local jwt = md:get("envoy.filters.http.jwt_authn")
+                      if jwt ~= nil and jwt["kc"] ~= nil then
+                        local claims = jwt["kc"]
+                        local user = claims["preferred_username"] or claims["sub"]
+                        if user ~= nil then
+                          request_handle:headers():replace("x-remote-user", user)
+                        end
+                        local groups = claims["groups"]
+                        if groups ~= nil then
+                          -- remove any existing and add one per group
+                          request_handle:headers():remove("x-remote-group")
+                          for _,g in ipairs(groups) do
+                            request_handle:headers():add("x-remote-group", g)
+                          end
+                        end
+                      end
+                    end
+              # 4) TLS termination & forward upstream
+              - name: envoy.filters.http.router
+                typed_config:
+                  "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
+              common_http_protocol_options: { idle_timeout: 3600s }
+              upgrade_configs: [{ upgrade_type: "websocket" }]
+          transport_socket:
+            name: envoy.transport_sockets.tls
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.DownstreamTlsContext
+              common_tls_context:
+                tls_certificates:
+                  # self-signed for demo; we terminate TLS at Envoy
+                  certificate_chain: { filename: "/etc/envoy/tls/tls.crt" }
+                  private_key: { filename: "/etc/envoy/tls/tls.key" }
+
+      clusters:
+      # upstream to kube-apiserver Service
+      - name: kubeapi
+        type: STRICT_DNS
+        connect_timeout: 2s
+        load_assignment:
+          cluster_name: kubeapi
+          endpoints:
+          - lb_endpoints:
+            - endpoint: { address: { socket_address: { address: kubernetes.default.svc, port_value: 443 } } }
+        transport_socket:
+          name: envoy.transport_sockets.tls
+          typed_config:
+            "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.UpstreamTlsContext
+            sni: kubernetes.default.svc
+            common_tls_context:
+              tls_certificates:
+                # present front-proxy client cert/key to apiserver
+                certificate_chain: { filename: "/etc/front-proxy/tls.crt" }
+                private_key: { filename: "/etc/front-proxy/tls.key" }
+              validation_context:
+                trusted_ca: { filename: "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt" }
+
+      # Keycloak endpoints
+      - name: oidc
+        type: STRICT_DNS
+        connect_timeout: 2s
+        load_assignment:
+          cluster_name: oidc
+          endpoints:
+          - lb_endpoints:
+            - endpoint: { address: { socket_address: { address: sso.neeranuchj.org, port_value: 443 } } }
+        transport_socket:
+          name: envoy.transport_sockets.tls
+          typed_config:
+            "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.UpstreamTlsContext
+            sni: sso.neeranuchj.org
+            common_tls_context:
+              validation_context:
+                trusted_ca: { filename: "/etc/oidc/ca.crt" }
+
+    layered_runtime:
+      layers:
+      - name: static
+        static_layer:
+          envoy.reloadable_features.remove_frequently_accessed_value_from_header_string: true

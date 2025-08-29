@@ -1,0 +1,53 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: envoy-oauth-gw
+  namespace: envoy-gw
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: envoy-oauth-gw }
+  template:
+    metadata:
+      labels: { app: envoy-oauth-gw }
+    spec:
+      serviceAccountName: default
+      containers:
+      - name: envoy
+        image: envoyproxy/envoy:v1.30.2
+        args: ["-c","/etc/envoy/envoy.yaml","--log-level","info"]
+        ports:
+        - name: https
+          containerPort: 8443
+        volumeMounts:
+        - { name: cfg,            mountPath: /etc/envoy }
+        - { name: front-proxy,    mountPath: /etc/front-proxy, readOnly: true }
+        - { name: oidc-ca,        mountPath: /etc/oidc,        readOnly: true }
+        - { name: listener-certs, mountPath: /etc/envoy/tls,   readOnly: true }
+        env:
+        - name: ISSUER
+          valueFrom: { secretKeyRef: { name: oidc-oauth, key: client_id } } # dummy to force env load
+        # templated values are embedded in config; client_id via secret reference in oauth2 block
+      volumes:
+      - name: cfg
+        configMap: { name: envoy-config, items: [{ key: envoy.yaml, path: envoy.yaml }] }
+      - name: front-proxy
+        secret: { secretName: front-proxy-client }
+      - name: oidc-ca
+        secret: { secretName: oidc-ca }
+      - name: listener-certs
+        secret: { secretName: envoy-listener }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: envoy-oauth-gw
+  namespace: envoy-gw
+spec:
+  type: NodePort
+  selector: { app: envoy-oauth-gw }
+  ports:
+  - name: https
+    port: 443
+    targetPort: 8443
+    nodePort: 30443
