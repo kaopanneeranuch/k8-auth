@@ -1,7 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: envoy-config
+  namespace: envoy-gw
 data:
   envoy.yaml: |
     static_resources:
-      # Static SDS secrets Envoy can reference by name
       secrets:
       - name: oidc-client-secret
         generic_secret:
@@ -42,23 +46,19 @@ data:
                       uri: "https://sso.neeranuchj.org/realms/k8s-realm/protocol/openid-connect/token"
                       cluster: oidc
                       timeout: 5s
-
                     redirect_uri: "https://$REQUEST_AUTHORITY/oauth2/callback"
                     redirect_path_matcher: { path: { exact: "/oauth2/callback" } }
                     signout_path:         { path: { exact: "/oauth2/logout"   } }
-
                     use_refresh_token: true
                     forward_bearer_token: true
                     auth_scopes: ["openid","profile","email","groups"]
-
                     credentials:
                       client_id: "k8s-client"
                       token_secret:
-                        name: oidc-client-secret    # <-- refers to static secret above
-
-                    # v1.30.x: use hmac_secret (SDS) and default cookie names
+                        name: oidc-client-secret
+                    # Envoy v1.30: hmac_secret is valid here (default cookie names are used)
                     hmac_secret:
-                      name: oauth-hmac-secret      # <-- refers to static secret above
+                      name: oauth-hmac-secret
 
               - name: envoy.filters.http.jwt_authn
                 typed_config:
@@ -66,14 +66,14 @@ data:
                   providers:
                     kc:
                       issuer: "https://sso.neeranuchj.org/realms/k8s-realm"
-                      forward: true
-                      from_cookies: ["kc_access"]
                       remote_jwks:
                         http_uri:
                           uri: "https://sso.neeranuchj.org/realms/k8s-realm/protocol/openid-connect/certs"
                           cluster: oidc
                           timeout: 5s
                         cache_duration: 600s
+                      from_cookies: ["kc_access"]
+                      forward: true
                   rules:
                   - match: { prefix: "/" }
                     requires: { provider_name: kc }
@@ -101,6 +101,7 @@ data:
                         end
                       end
                     end
+
               - name: envoy.filters.http.router
                 typed_config:
                   "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
