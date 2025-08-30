@@ -1,16 +1,12 @@
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: envoy-config
-  namespace: envoy-gw
 data:
   envoy.yaml: |
     static_resources:
-      # secrets:
-      # - name: oidc-client-secret
-      #   generic_secret:
-      #     secret:
-      #       filename: /etc/envoy/oidc-oauth/client_secret
+      # SDS secrets Envoy reads from mounted files
+      secrets:
+      - name: oidc-client-secret
+        generic_secret:
+          secret:
+            filename: /etc/envoy/oidc-oauth/client_secret
 
       listeners:
       - name: listener_https
@@ -22,8 +18,6 @@ data:
               "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
               stat_prefix: ingress_http
               codec_type: AUTO
-              common_http_protocol_options: { idle_timeout: 3600s }
-              upgrade_configs: [{ upgrade_type: websocket }]
               route_config:
                 name: local_route
                 virtual_hosts:
@@ -52,7 +46,6 @@ data:
                       client_id: "k8s-client"
                       token_secret:
                         name: oidc-client-secret
-
               - name: envoy.filters.http.jwt_authn
                 typed_config:
                   "@type": type.googleapis.com/envoy.extensions.filters.http.jwt_authn.v3.JwtAuthentication
@@ -72,3 +65,61 @@ data:
                   rules:
                   - match: { prefix: "/" }
                     requires: { provider_name: kc }
+              - name: envoy.filters.http.router
+                typed_config:
+                  "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
+          transport_socket:
+            name: envoy.transport_sockets.tls
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.DownstreamTlsContext
+              common_tls_context:
+                tls_certificates:
+                - certificate_chain: { filename: /etc/envoy/tls/tls.crt }
+                  private_key:       { filename: /etc/envoy/tls/tls.key }
+
+      # >>> you removed these; add them back
+      clusters:
+      - name: kubeapi
+        type: STRICT_DNS
+        connect_timeout: 2s
+        load_assignment:
+          cluster_name: kubeapi
+          endpoints:
+          - lb_endpoints:
+            - endpoint:
+                address:
+                  socket_address:
+                    address: kubernetes.default.svc
+                    port_value: 443
+        transport_socket:
+          name: envoy.transport_sockets.tls
+          typed_config:
+            "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.UpstreamTlsContext
+            sni: kubernetes.default.svc
+            common_tls_context:
+              tls_certificates:
+              - certificate_chain: { filename: /etc/front-proxy/tls.crt }
+                private_key:       { filename: /etc/front-proxy/tls.key }
+              validation_context:
+                trusted_ca: { filename: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt }
+
+      - name: oidc
+        type: STRICT_DNS
+        connect_timeout: 2s
+        load_assignment:
+          cluster_name: oidc
+          endpoints:
+          - lb_endpoints:
+            - endpoint:
+                address:
+                  socket_address:
+                    address: sso.neeranuchj.org
+                    port_value: 443
+        transport_socket:
+          name: envoy.transport_sockets.tls
+          typed_config:
+            "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.UpstreamTlsContext
+            sni: sso.neeranuchj.org
+            common_tls_context:
+              validation_context:
+                trusted_ca: { filename: /etc/oidc/ca.crt }
