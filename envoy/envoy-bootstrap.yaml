@@ -1,3 +1,8 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: envoy-config
+  namespace: envoy-gw
 data:
   envoy.yaml: |
     static_resources:
