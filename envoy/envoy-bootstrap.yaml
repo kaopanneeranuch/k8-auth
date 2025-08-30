@@ -52,10 +52,6 @@ data:
                       client_id: "k8s-client"
                       token_secret:
                         name: oidc-client-secret
-                    # 1.30.x: configure only cookie names (no hmac_secret here)
-                    cookie_names:
-                      bearer_token: "kc_access"
-                      refresh_token: "kc_refresh"
 
               - name: envoy.filters.http.jwt_authn
                 typed_config:
@@ -69,8 +65,10 @@ data:
                           cluster: oidc
                           timeout: 5s
                         cache_duration: 600s
-                      from_cookies: ["kc_access"]   # matches OAuth2 cookie_names
                       forward: true
+                      from_headers:
+                      - name: Authorization
+                        value_prefix: "Bearer "
                   rules:
                   - match: { prefix: "/" }
                     requires: { provider_name: kc }
