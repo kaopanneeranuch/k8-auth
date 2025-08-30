@@ -8,7 +8,7 @@ data:
     static_resources:
       # SDS secrets Envoy reads from mounted files
       secrets:
-      - name: oidc-client-secret
+      - name: oidc-client
         generic_secret:
           secret:
             filename: /etc/envoy/oidc-oauth/client_secret
@@ -50,7 +50,7 @@ data:
                     credentials:
                       client_id: "k8s-client"
                       token_secret:
-                        name: oidc-client-secret
+                        name: oidc-client
               - name: envoy.filters.http.jwt_authn
                 typed_config:
                   "@type": type.googleapis.com/envoy.extensions.filters.http.jwt_authn.v3.JwtAuthentication
