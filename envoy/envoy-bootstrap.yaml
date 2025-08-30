@@ -6,11 +6,11 @@ metadata:
 data:
   envoy.yaml: |
     static_resources:
-      secrets:
-      - name: oidc-client-secret
-        generic_secret:
-          secret:
-            filename: /etc/envoy/oidc-oauth/client_secret
+      # secrets:
+      # - name: oidc-client-secret
+      #   generic_secret:
+      #     secret:
+      #       filename: /etc/envoy/oidc-oauth/client_secret
 
       listeners:
       - name: listener_https
