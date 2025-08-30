@@ -6,16 +6,11 @@ metadata:
 data:
   envoy.yaml: |
     static_resources:
-      # Declare SDS secrets exactly once; referenced by name below
       secrets:
       - name: oidc-client-secret
         generic_secret:
           secret:
             filename: /etc/envoy/oidc-oauth/client_secret
-      - name: oauth-hmac-secret
-        generic_secret:
-          secret:
-            filename: /etc/envoy/oauth-hmac/secret
 
       listeners:
       - name: listener_https
@@ -49,19 +44,12 @@ data:
                     redirect_path_matcher: { path: { exact: "/oauth2/callback" } }
                     signout_path:         { path: { exact: "/oauth2/logout"   } }
                     forward_bearer_token: true
-                    use_refresh_token: { value: true }   # v1.30 uses BoolValue
+                    use_refresh_token: true
                     auth_scopes: ["openid","profile","email","groups"]
                     credentials:
                       client_id: "k8s-client"
                       token_secret:
-                        name: "oidc-client-secret"       # <-- SDS reference (no filename here)
-                    token_formation:                      # <-- REQUIRED in your build
-                      bearer_token:
-                        cookie: { name: "kc_access" }
-                      refresh_token:
-                        cookie: { name: "kc_refresh" }
-                      hmac_secret:
-                        name: "oauth-hmac-secret"         # <-- SDS reference
+                        name: "oidc-client-secret"   # SDS reference (do NOT put filename here)
               - name: envoy.filters.http.jwt_authn
                 typed_config:
                   "@type": type.googleapis.com/envoy.extensions.filters.http.jwt_authn.v3.JwtAuthentication
@@ -69,7 +57,10 @@ data:
                     kc:
                       issuer: "https://sso.neeranuchj.org/realms/k8s-realm"
                       forward: true
-                      from_cookies: ["kc_access"]
+                      # Read the Bearer token the oauth2 filter forwards in the header:
+                      from_headers:
+                      - name: Authorization
+                        value_prefix: "Bearer "
                       remote_jwks:
                         http_uri:
                           uri: "https://sso.neeranuchj.org/realms/k8s-realm/protocol/openid-connect/certs"

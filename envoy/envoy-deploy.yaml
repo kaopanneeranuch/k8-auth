@@ -23,8 +23,7 @@ spec:
         - { name: front-proxy,    mountPath: /etc/front-proxy, readOnly: true }
         - { name: oidc-ca,        mountPath: /etc/oidc,        readOnly: true }
         - { name: listener-certs, mountPath: /etc/envoy/tls,   readOnly: true }
-        - { name: oidc-oauth,     mountPath: /etc/envoy/oidc-oauth,  readOnly: true }
-        - { name: oauth-hmac,     mountPath: /etc/envoy/oauth-hmac,  readOnly: true }
+        - { name: oidc-oauth,     mountPath: /etc/envoy/oidc-oauth, readOnly: true } # client_secret file
       volumes:
       - name: cfg
         configMap:
@@ -37,9 +36,7 @@ spec:
       - name: listener-certs
         secret: { secretName: envoy-listener }
       - name: oidc-oauth
-        secret: { secretName: oidc-oauth }   
-      - name: oauth-hmac
-        secret: { secretName: oauth-hmac }     
+        secret: { secretName: oidc-oauth }   # keys: client_id, client_secret
 ---
 apiVersion: v1
 kind: Service
