@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: envoy-oauth-gw
-  namespace: envoy-gw
+  namespace: envoy
 spec:
   replicas: 1
   selector:
