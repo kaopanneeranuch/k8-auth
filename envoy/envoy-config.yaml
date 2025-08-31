@@ -7,7 +7,11 @@ data:
   envoy.yaml: |
     static_resources:
       secrets:
-      - name: oidc-client-secret-a1
+      - name: oidc-token-secret-a2
+        generic_secret:
+          secret:
+            filename: /etc/envoy/oidc-oauth/client_secret
+      - name: oidc-hmac-secret-a2
         generic_secret:
           secret:
             filename: /etc/envoy/oidc-oauth/client_secret
@@ -21,7 +25,6 @@ data:
             typed_config:
               "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
               stat_prefix: ingress_http
-              codec_type: AUTO
               route_config:
                 name: local_route
                 virtual_hosts:
@@ -49,7 +52,9 @@ data:
                     credentials:
                       client_id: "k8s-client"
                       token_secret:
-                        name: "oidc-client-secret-a1"   # <-- must match the static secret name above
+                        name: "oidc-token-secret-a2"
+                    hmac_secret:
+                      name: "oidc-hmac-secret-a2"
               - name: envoy.filters.http.jwt_authn
                 typed_config:
                   "@type": type.googleapis.com/envoy.extensions.filters.http.jwt_authn.v3.JwtAuthentication
