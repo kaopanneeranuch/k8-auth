@@ -7,7 +7,7 @@ data:
   envoy.yaml: |
     static_resources:
       secrets:
-      - name: oidc-client-secret
+      - name: oidc-client-secret-a1
         generic_secret:
           secret:
             filename: /etc/envoy/oidc-oauth/client_secret
@@ -42,14 +42,14 @@ data:
                       timeout: 5s
                     redirect_uri: "https://$REQUEST_AUTHORITY/oauth2/callback"
                     redirect_path_matcher: { path: { exact: "/oauth2/callback" } }
-                    signout_path:         { path: { exact: "/oauth2/logout"   } }
+                    signout_path:         { path: { exact: "/oauth2/logout" } }
                     forward_bearer_token: true
                     use_refresh_token: true
                     auth_scopes: ["openid","profile","email","groups"]
                     credentials:
                       client_id: "k8s-client"
                       token_secret:
-                        name: "oidc-client-secret"   # SDS reference (do NOT put filename here)
+                        name: "oidc-client-secret-a1"   # <-- must match the static secret name above
               - name: envoy.filters.http.jwt_authn
                 typed_config:
                   "@type": type.googleapis.com/envoy.extensions.filters.http.jwt_authn.v3.JwtAuthentication
@@ -57,7 +57,6 @@ data:
                     kc:
                       issuer: "https://sso.neeranuchj.org/realms/k8s-realm"
                       forward: true
-                      # Read the Bearer token the oauth2 filter forwards in the header:
                       from_headers:
                       - name: Authorization
                         value_prefix: "Bearer "
@@ -91,8 +90,7 @@ data:
           endpoints:
           - lb_endpoints:
             - endpoint:
-                address:
-                  socket_address: { address: kubernetes.default.svc, port_value: 443 }
+                address: { socket_address: { address: kubernetes.default.svc, port_value: 443 } }
         transport_socket:
           name: envoy.transport_sockets.tls
           typed_config:
@@ -113,8 +111,7 @@ data:
           endpoints:
           - lb_endpoints:
             - endpoint:
-                address:
-                  socket_address: { address: sso.neeranuchj.org, port_value: 443 }
+                address: { socket_address: { address: sso.neeranuchj.org, port_value: 443 } }
         transport_socket:
           name: envoy.transport_sockets.tls
           typed_config:
