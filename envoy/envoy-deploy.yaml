@@ -23,7 +23,7 @@ spec:
         - { name: front-proxy,    mountPath: /etc/front-proxy, readOnly: true }
         - { name: oidc-ca,        mountPath: /etc/oidc,        readOnly: true }
         - { name: listener-certs, mountPath: /etc/envoy/tls,   readOnly: true }
-        - { name: oidc-oauth,     mountPath: /etc/envoy/oidc-oauth, readOnly: true } # client_secret file
+        - { name: oidc-oauth,     mountPath: /etc/envoy/oidc-oauth, readOnly: true } 
       volumes:
       - name: cfg
         configMap:
