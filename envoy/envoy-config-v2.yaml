@@ -108,9 +108,9 @@ data:
             "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.UpstreamTlsContext
             sni: kubernetes.default.svc
             common_tls_context:
-              tls_certificates:
-              - certificate_chain: { filename: /etc/front-proxy/tls.crt }
-                private_key:       { filename: /etc/front-proxy/tls.key }
+              # tls_certificates:
+              # - certificate_chain: { filename: /etc/front-proxy/tls.crt }
+              #   private_key:       { filename: /etc/front-proxy/tls.key }
               validation_context:
                 trusted_ca: { filename: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt }
 
