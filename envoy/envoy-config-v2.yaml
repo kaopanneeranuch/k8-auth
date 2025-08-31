@@ -26,6 +26,7 @@ data:
             typed_config:
               "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
               stat_prefix: ingress_http
+              codec_type: AUTO
               route_config:
                 name: local_route
                 virtual_hosts:
@@ -54,17 +55,38 @@ data:
                       client_id: "k8s-client"
                       token_secret:
                         name: "oidc-token-secret-c1"   # must match static secret above
+              - name: envoy.filters.http.jwt_authn
+                typed_config:
+                  "@type": type.googleapis.com/envoy.extensions.filters.http.jwt_authn.v3.JwtAuthentication
+                  providers:
+                    kc:
+                      issuer: "https://sso.neeranuchj.org/realms/k8s-realm"
+                      forward: true
+                      from_headers:
+                      - name: Authorization
+                        value_prefix: "Bearer "
+                      remote_jwks:
+                        http_uri:
+                          uri: "https://sso.neeranuchj.org/realms/k8s-realm/protocol/openid-connect/certs"
+                          cluster: oidc
+                          timeout: 5s
+                        cache_duration: 600s
+                  rules:
+                  - match: { prefix: "/" }
+                    requires: { provider_name: kc }
               - name: envoy.filters.http.router
                 typed_config:
                   "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
-        transport_socket:
-          name: envoy.transport_sockets.tls
-          typed_config:
-            "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.DownstreamTlsContext
-            common_tls_context:
-              tls_certificates:
-              - certificate_chain: { filename: /etc/envoy/tls/tls.crt }
-                private_key:       { filename: /etc/envoy/tls/tls.key }
+
+          # ⬇️ the TLS for the listener lives on the filter_chain, not on the listener
+          transport_socket:
+            name: envoy.transport_sockets.tls
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.DownstreamTlsContext
+              common_tls_context:
+                tls_certificates:
+                - certificate_chain: { filename: /etc/envoy/tls/tls.crt }
+                  private_key:       { filename: /etc/envoy/tls/tls.key }
 
       # ---- Upstream clusters ----
       clusters:
